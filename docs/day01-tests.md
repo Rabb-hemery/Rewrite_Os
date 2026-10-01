@@ -1,135 +1,99 @@
-# Rewrite_OS
+# Jour 1 : tests et erreurs / Day 1: Tests and Errors
 
-[English Version](#english) | [Version Française](#french)
-
----
-
-## <a id="english"></a> 🇬🇧 English Version
-
-A hobby operating system written from scratch for x86, following the *Building an OS* series by nanobyte. Goal: one small step per day, over about 3 months, with my own notes for each step.
-
-![Day 1: Hello from the boot sector](docs/images/day01-hello.png)
-
-### Tools
-
-- `nasm`: assembler
-- `make`: build system
-- `qemu-system-i386`: virtual machine to test the OS
-- Developed on Arch Linux
-
-### Build and run
-
-```bash
-make run     # assembles the code, builds the floppy image, starts QEMU
-make clean   # removes the build/ folder
-```
-
-### Progress
-
-| Day | Topic | Notes |
-|-----|-------|-------|
-| 1 | Boot sector, "Hello World" with BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
-
----
-
-### Day 1: what I learned
-
-#### 1. What is assembly?
-Assembly is machine code written in a human-readable way. An instruction is a mnemonic plus 0 to 2 operands (`mov ax, 5`). NASM turns it into bytes. Here we target x86.
-
-#### 2. How a PC boots (legacy mode)
-The BIOS reads the first sector (512 bytes) of the disk and checks that its last 2 bytes equal `0xAA55`. It then loads the sector at `0x7C00` and jumps to it. My OS starts there.
-
-#### 3. Directives vs instructions
-A directive guides NASM and is not turned into machine code:
-
-- `org 0x7C00`: "compute addresses starting at 0x7C00". It does not force the BIOS to load there, it only informs NASM.
-- `bits 16`: the CPU always starts in 16-bit mode, for backward compatibility with the 8086.
-- `times 510-($-$$) db 0`: `$` is the current line, `$$` the start of the section, so `$-$$` is the code size so far. It pads with zeros up to 510 bytes.
-- `dw 0AA55h`: the last 2 bytes (the boot signature).
-
-#### 4. Registers and segments
-Registers are tiny, very fast memories inside the CPU (`ax`, `si`, `sp`, `ds`, `ss`...). A real address is computed as **segment × 16 + offset**. Several pairs give the same address: `0x0000:0x7C00` and `0x07C0:0x0000` are both `0x7C00`. Another rule: a constant cannot be written directly into a segment register, so we go through `ax`:
-
-```nasm
-mov ax, 0
-mov ds, ax
-```
-
-#### 5. The stack
-It is last-in, first-out (`push`/`pop`) and is used by `call`/`ret`. It grows **downwards** in memory, so we set `sp = 0x7C00`: it grows away from our code and does not overwrite it.
-
-#### 6. Printing text (`puts`)
-- `lodsb`: loads the byte at `ds:si` into `al`, then `si++`.
-- `or al, al`: leaves `al` unchanged but updates the zero flag. `jz .done` leaves the loop when the character is 0.
-- `int 0x10` with `ah = 0x0E`: asks the BIOS to print the character in `al`. Also set `bh = 0` (page).
-- A new line is `0x0D, 0x0A` (carriage return + line feed).
-
-#### Note about the "Boot failed" message in QEMU
-At startup SeaBIOS first tries the hard disk. QEMU has none, so it prints "Boot failed: could not read the boot disk", then falls back to the floppy, which is my image. This is normal and not a bug in my code.
+[Version Française](#french) | [English Version](#english)
 
 ---
 
 ## <a id="french"></a> 🇫🇷 Version Française
 
-Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l'architecture x86, en suivant la série *Building an OS* de nanobyte. Objectif : faire un petit pas par jour sur environ 3 mois, avec mes propres notes pour chaque étape.
+Journal des expériences faites sur `main.asm`. Pour chaque test : ce que je prévois, ce que j'observe, et pourquoi.
 
-![Jour 1 : Hello depuis le secteur d'amorçage](docs/images/day01-hello.png)
+### Résultat de référence
 
-### Outils
+![QEMU affichant Hello RewriteOS!](images/day01-hello.png)
 
-- `nasm` : l'assembleur
-- `make` : le système de build
-- `qemu-system-i386` : la machine virtuelle pour tester l'OS
-- Développé sous Arch Linux
+Le message `Hello RewriteOS!` s'affiche : le boot sector fonctionne.
 
-### Compilation et exécution
+### Message « Boot failed: could not read the boot disk »
 
-```bash
-make run     # assemble le code, génère l'image de la disquette et lance QEMU
-make clean   # supprime le dossier de build (build/)
-```
+* **Observé :** juste avant mon message, QEMU affiche `Booting from Hard Disk... Boot failed: could not read the boot disk`, puis `Booting from Floppy...`.
+* **Explication :** le BIOS (SeaBIOS) essaie d'abord le disque dur, qui n'existe pas dans QEMU, puis passe à la disquette. Ce n'est pas une erreur de mon code.
+* **Option :** ajouter `-boot a` dans la règle `run` du Makefile pour démarrer directement sur la disquette.
 
-### Progression
+### Test 1 : calcul d'adresse (papier)
 
-| Jour | Sujet | Notes |
-|------|-------|-------|
-| 1 | Secteur d'amorçage, "Hello World" avec l'interruption BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
+* **Question :** quelle adresse réelle donne `0x1234:0x0010` ?
+* **Mon calcul :** _à compléter_
+* **Vérification :** segment × 16 + offset
+
+### Test 2 : enlever le `jmp .loop` dans `puts`
+
+* **Prévu :** _à compléter_
+* **Observé :** _à compléter (capture possible dans `images/`)_
+* **Pourquoi :** _à compléter_
+
+### Test 3 : macro `ENDL`
+
+* **Modification :** `%define ENDL 0x0D, 0x0A` puis `msg: db 'Salut', ENDL, 0`
+* **Observé :** _à compléter_
+
+### Test 4 : `sp = 0x7E00` au lieu de `0x7C00`
+
+* **Prévu :** _à compléter_
+* **Observé :** _à compléter_
+* **Pourquoi :** _à compléter (vers où descend la pile ?)_
+
+### Erreurs rencontrées
+
+| Erreur / symptôme | Cause | Solution |
+|-------------------|-------|----------|
+| `fatal: not a git repository` | `git init` pas encore fait | `git init` à la racine du projet |
+| _à compléter_ | | |
 
 ---
 
-### Jour 1 : ce que j'ai appris
+## <a id="english"></a> 🇬🇧 English Version
 
-#### 1. Qu'est-ce que l'assembleur ?
-L'assembleur est du code machine écrit d'une manière lisible par l'humain. Une instruction est composée d'un mnémonique et de 0 à 2 opérandes (`mov ax, 5`). NASM transforme cela en octets. Ici, nous ciblons l'architecture x86.
+Log of experiments performed on `main.asm`. For each test: what I expect, what I observe, and why.
 
-#### 2. Comment un PC démarre (mode legacy)
-Le BIOS lit le premier secteur (512 octets) du disque et vérifie que ses 2 derniers octets sont égaux à `0xAA55`. Il charge ensuite ce secteur à l'adresse mémoire `0x7C00` et saute (jump) dessus. C'est là que mon OS commence.
+### Reference result
 
-#### 3. Directives vs instructions
-Une directive guide NASM et n'est pas transformée en code machine :
+![QEMU displaying Hello RewriteOS!](images/day01-hello.png)
 
-- `org 0x7C00` : "calcule les adresses en commençant à 0x7C00". Cela ne force pas le BIOS à charger le code à cet endroit, cela informe simplement NASM.
-- `bits 16` : le processeur démarre toujours en mode 16 bits, pour des raisons de rétrocompatibilité avec le 8086.
-- `times 510-($-$$) db 0` : `$` représente la ligne actuelle, `$$` le début de la section, donc `$-$$` donne la taille du code écrit jusqu'ici. Cette commande remplit le reste avec des zéros jusqu'à atteindre 510 octets.
-- `dw 0AA55h` : les 2 derniers octets (la signature d'amorçage ou *boot signature*).
+The message `Hello RewriteOS!` is displayed: the boot sector works.
 
-#### 4. Registres et segments
-Les registres sont de toutes petites mémoires très rapides situées directement dans le processeur (`ax`, `si`, `sp`, `ds`, `ss`...). Une adresse réelle se calcule ainsi : **segment × 16 + offset**. Plusieurs paires de valeurs peuvent donner la même adresse physique : `0x0000:0x7C00` et `0x07C0:0x0000` pointent toutes les deux vers `0x7C00`. Autre règle : on ne peut pas écrire une constante directement dans un registre de segment, il faut obligatoirement passer par `ax` :
+### "Boot failed: could not read the boot disk" message
 
-```nasm
-mov ax, 0
-mov ds, ax
-```
+* **Observed:** just before my message, QEMU prints `Booting from Hard Disk... Boot failed: could not read the boot disk`, then `Booting from Floppy...`.
+* **Explanation:** the BIOS (SeaBIOS) tries the hard disk first, which does not exist in QEMU, then falls back to the floppy. This is not a bug in my code.
+* **Option:** add `-boot a` to the `run` rule in the Makefile to boot directly from the floppy.
 
-#### 5. La pile (The stack)
-Elle fonctionne selon le principe du "dernier entré, premier sorti" (`push`/`pop`) et est utilisée par `call`/`ret`. Elle grandit **vers le bas** de la mémoire, c'est pourquoi nous définissons `sp = 0x7C00` : elle s'éloigne ainsi de notre code et ne risque pas de l'écraser.
+### Test 1: address calculation (paper)
 
-#### 6. Afficher du texte (`puts`)
-- `lodsb` : charge l'octet situé à l'adresse `ds:si` dans `al`, puis incrémente `si` (`si++`).
-- `or al, al` : laisse `al` inchangé mais met à jour le drapeau zéro (*zero flag*). `jz .done` permet de quitter la boucle lorsque le caractère lu est égal à 0.
-- `int 0x10` avec `ah = 0x0E` : demande au BIOS d'afficher le caractère contenu dans `al`. On définit également `bh = 0` (la page d'affichage).
-- Un saut de ligne est représenté par `0x0D, 0x0A` (retour chariot + saut de ligne).
+* **Question:** what real address does `0x1234:0x0010` yield?
+* **My calculation:** _to be completed_
+* **Verification:** segment × 16 + offset
 
-#### Note concernant le message "Boot failed" dans QEMU
-Au démarrage, SeaBIOS cherche d'abord à démarrer sur le disque dur. QEMU n'en ayant pas, il affiche "Boot failed: could not read the boot disk", puis bascule sur la disquette, qui contient mon image. C'est un comportement tout à fait normal et ce n'est pas un bug dans mon code.
+### Test 2: removing `jmp .loop` in `puts`
+
+* **Expected:** _to be completed_
+* **Observed:** _to be completed (screenshot possible in `images/`)_
+* **Why:** _to be completed_
+
+### Test 3: `ENDL` macro
+
+* **Modification:** `%define ENDL 0x0D, 0x0A` then `msg: db 'Hi', ENDL, 0`
+* **Observed:** _to be completed_
+
+### Test 4: `sp = 0x7E00` instead of `0x7C00`
+
+* **Expected:** _to be completed_
+* **Observed:** _to be completed_
+* **Why:** _to be completed (which way does the stack grow?)_
+
+### Errors encountered
+
+| Error / symptom | Cause | Solution |
+|-----------------|-------|----------|
+| `fatal: not a git repository` | `git init` not done yet | `git init` at the project root |
+| _to be completed_ | | |
