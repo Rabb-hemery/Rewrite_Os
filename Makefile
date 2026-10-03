@@ -2,7 +2,7 @@ ASM=nasm
 SRC_DIR=src
 BUILD_DIR=build
 
-.PHONY: all floppy_image kernel bootloader clean always run
+.PHONY: all floppy_image kernel bootloader clean always run run-monitor
 
 all: floppy_image
 
@@ -44,3 +44,7 @@ clean:
 
 run: floppy_image
 	qemu-system-i386 -fda $(BUILD_DIR)/main_floppy.img
+
+# QEMU avec son moniteur dans le terminal : tape par exemple  xp /16xb 0x7e00
+run-monitor: floppy_image
+	qemu-system-i386 -fda $(BUILD_DIR)/main_floppy.img -monitor stdio

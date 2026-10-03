@@ -31,6 +31,7 @@ make clean   # removes the build/ folder
 |-----|-------|-------|
 | 1 | Boot sector, "Hello World" with BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
 | 2 | Bootloader / kernel split, FAT12 floppy image | [docs/day02.md](docs/day02.md) |
+| 3 | Reading the disk: LBA to CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 
 ---
 
@@ -106,6 +107,27 @@ Multi-byte numbers are stored low byte first: 512 = `0x0200` is stored as `00 02
 
 ---
 
+### Day 3: what I learned
+
+![Day 3: Read from disk!](docs/images/day03-read-ok.png)
+
+#### 1. CHS and LBA
+A disk is divided into cylinders, heads and sectors (**CHS**). The BIOS wants CHS, but it is simpler for me to number sectors with one value (**LBA**), so the bootloader converts: `sector = (LBA % 18) + 1`, `head = (LBA / 18) % 2`, `cylinder = (LBA / 18) / 2` (for 18 sectors per track and 2 heads).
+
+#### 2. Reading with the BIOS
+`int 0x13` with `ah = 02h` reads sectors. `al` = number of sectors, `ch`/`cl` = cylinder and sector, `dh` = head, `dl` = drive, `es:bx` = destination in memory. On failure the carry flag (CF) is set.
+
+#### 3. Reliability
+Floppy disks are unreliable, so the bootloader tries up to 3 times, resetting the disk controller between attempts. If all fail, it prints an error, waits for a key (`int 0x16`) and reboots with `jmp 0FFFFh:0`.
+
+#### 4. Checking the result
+`make run-monitor` opens QEMU with its monitor in the terminal. The command `xp /16xb 0x7e00` shows the loaded sector: the start of the FAT table (`f0 ff ff ff 0f ...`), where the entry for `kernel.bin` (cluster 2) marks the end of its chain.
+
+#### 5. `cli` before `hlt`
+`cli` disables interrupts so that `hlt` really stops the CPU.
+
+---
+
 ## <a id="french"></a> 🇫🇷 Version Française
 
 Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l'architecture x86, en suivant la série *Building an OS* de nanobyte. Objectif : faire un petit pas par jour sur environ 3 mois, avec mes propres notes pour chaque étape.
@@ -133,6 +155,7 @@ make clean   # supprime le dossier de build (build/)
 |------|-------|-------|
 | 1 | Secteur d'amorçage, "Hello World" avec l'interruption BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
 | 2 | Séparation bootloader / kernel, image disquette FAT12 | [docs/day02.md](docs/day02.md) |
+| 3 | Lecture du disque : LBA vers CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 
 ---
 
@@ -205,3 +228,24 @@ Tous les BIOS et toutes les machines virtuelles gèrent les disquettes, les imag
 
 #### 5. Little-endian
 Les nombres sur plusieurs octets sont stockés en commençant par l'octet de poids faible : 512 = `0x0200` s'écrit `00 02`, et les octets `12 34 56 78` du numéro de série forment la valeur `0x78563412`, que `mdir` affiche `7856-3412`.
+
+---
+
+### Jour 3 : ce que j'ai appris
+
+![Jour 3 : Read from disk!](docs/images/day03-read-ok.png)
+
+#### 1. CHS et LBA
+Un disque est divisé en cylindres, têtes et secteurs (**CHS**). Le BIOS veut du CHS, mais il est plus simple pour moi de numéroter les secteurs avec un seul nombre (**LBA**). Le bootloader convertit donc : `secteur = (LBA % 18) + 1`, `tête = (LBA / 18) % 2`, `cylindre = (LBA / 18) / 2` (pour 18 secteurs par piste et 2 têtes).
+
+#### 2. Lire avec le BIOS
+`int 0x13` avec `ah = 02h` lit des secteurs. `al` = nombre de secteurs, `ch`/`cl` = cylindre et secteur, `dh` = tête, `dl` = lecteur, `es:bx` = destination en mémoire. En cas d'échec, le flag carry (CF) est à 1.
+
+#### 3. Fiabilité
+Les disquettes sont peu fiables, donc le bootloader réessaie jusqu'à 3 fois en réinitialisant le contrôleur entre deux essais. Si tout échoue, il affiche une erreur, attend une touche (`int 0x16`) et redémarre avec `jmp 0FFFFh:0`.
+
+#### 4. Vérifier le résultat
+`make run-monitor` ouvre QEMU avec son moniteur dans le terminal. La commande `xp /16xb 0x7e00` montre le secteur chargé : le début de la table FAT (`f0 ff ff ff 0f ...`), où l'entrée de `kernel.bin` (cluster 2) marque la fin de sa chaîne.
+
+#### 5. `cli` avant `hlt`
+`cli` désactive les interruptions pour que `hlt` arrête vraiment le processeur.
