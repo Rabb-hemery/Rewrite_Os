@@ -2,9 +2,9 @@ ASM=nasm
 SRC_DIR=src
 BUILD_DIR=build
 
-.PHONY: all floppy_image kernel bootloader clean always run run-monitor
+.PHONY: all floppy_image kernel bootloader tools_fat clean always run run-monitor
 
-all: floppy_image
+all: floppy_image tools_fat
 
 #
 # Image disquette FAT12
@@ -16,6 +16,7 @@ $(BUILD_DIR)/main_floppy.img: bootloader kernel
 	mkfs.fat -F 12 -n "REWRITEOS" $(BUILD_DIR)/main_floppy.img
 	dd if=$(BUILD_DIR)/bootloader.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
+	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::test.txt"
 
 #
 # Bootloader
@@ -32,6 +33,15 @@ kernel: $(BUILD_DIR)/kernel.bin
 
 $(BUILD_DIR)/kernel.bin: always
 	$(ASM) $(SRC_DIR)/kernel/main.asm -f bin -o $(BUILD_DIR)/kernel.bin
+
+#
+# Outil FAT (tourne sur ton PC, pour comprendre FAT12)
+#
+tools_fat: $(BUILD_DIR)/tools/fat
+
+$(BUILD_DIR)/tools/fat: always tools/fat/fat.c
+	mkdir -p $(BUILD_DIR)/tools
+	gcc -g -Wall -o $(BUILD_DIR)/tools/fat tools/fat/fat.c
 
 #
 # Utilitaires

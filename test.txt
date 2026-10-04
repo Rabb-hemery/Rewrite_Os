@@ -1,0 +1,2 @@
+Bonjour depuis un fichier FAT12 !
+Ceci est test.txt

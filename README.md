@@ -16,6 +16,7 @@ A hobby operating system written from scratch for x86, following the *Building a
 - `make`: build system
 - `qemu-system-i386`: virtual machine to test the OS
 - `dosfstools` (`mkfs.fat`) and `mtools` (`mcopy`, `mdir`): build and inspect the FAT12 floppy image
+- `gcc`: compiler for the small FAT12 reader tool that runs on my PC
 - Developed on Arch Linux
 
 ### Build and run
@@ -23,6 +24,7 @@ A hobby operating system written from scratch for x86, following the *Building a
 ```bash
 make run     # assembles the bootloader and kernel, builds the FAT12 floppy image, starts QEMU
 make clean   # removes the build/ folder
+make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_floppy.img test.txt
 ```
 
 ### Progress
@@ -32,6 +34,7 @@ make clean   # removes the build/ folder
 | 1 | Boot sector, "Hello World" with BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
 | 2 | Bootloader / kernel split, FAT12 floppy image | [docs/day02.md](docs/day02.md) |
 | 3 | Reading the disk: LBA to CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
+| 4 | The FAT12 file system, reading a file in C | [docs/day04.md](docs/day04.md) |
 
 ---
 
@@ -128,6 +131,39 @@ Floppy disks are unreliable, so the bootloader tries up to 3 times, resetting th
 
 ---
 
+### Day 4: what I learned
+
+![Day 4: reading test.txt from the FAT12 image](docs/images/day04-exo2-read-test.png)
+
+#### 1. What is a file system?
+It is the way data is organized on a storage device, like the filing system of a library. FAT12 is very simple, which is why it is used for floppy disks and for getting started.
+
+#### 2. The 4 regions of a FAT12 disk
+Reserved sectors (boot sector and header), the FAT table (two copies), the root directory (the list of files) and the data region (the contents of the files).
+
+#### 3. Finding a file
+Compute where the root directory starts, read it, find the entry whose 11-character name matches, take its first cluster, convert the cluster to a sector (`start of data region + (cluster - 2) * sectors per cluster`), read it, then follow the FAT table to the next cluster until `0xFF8` or more.
+
+#### 4. FAT12 entries are 12 bits
+For cluster `n`, the entry starts at byte `n * 3 / 2`. If `n` is even I keep the low 12 bits, otherwise I shift right by 4.
+
+#### 5. A C tool to test the logic
+`tools/fat/fat.c` reads a file from the image on my PC: `./build/tools/fat build/main_floppy.img test.txt`. On day 5, I will translate the same logic into assembly so the bootloader can load `kernel.bin` by itself.
+
+#### 6. Layout of my floppy (LBA)
+
+| Area | Start (LBA) | Size (sectors) |
+|------|-------------|----------------|
+| Boot sector (reserved) | 0 | 1 |
+| FAT 1 | 1 | 9 |
+| FAT 2 | 10 | 9 |
+| Root directory | 19 | 14 |
+| Data region (cluster 2) | 33 | 2847 |
+
+`kernel.bin` is cluster 2 (sector 33), `test.txt` is cluster 3 (sector 34).
+
+---
+
 ## <a id="french"></a> 🇫🇷 Version Française
 
 Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l'architecture x86, en suivant la série *Building an OS* de nanobyte. Objectif : faire un petit pas par jour sur environ 3 mois, avec mes propres notes pour chaque étape.
@@ -140,6 +176,7 @@ Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l
 - `make` : le système de build
 - `qemu-system-i386` : la machine virtuelle pour tester l'OS
 - `dosfstools` (`mkfs.fat`) et `mtools` (`mcopy`, `mdir`) : pour créer et inspecter l'image disquette FAT12
+- `gcc` : compilateur du petit outil de lecture FAT12 qui tourne sur mon PC
 - Développé sous Arch Linux
 
 ### Compilation et exécution
@@ -147,6 +184,7 @@ Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l
 ```bash
 make run     # assemble le bootloader et le kernel, génère l'image disquette FAT12 et lance QEMU
 make clean   # supprime le dossier de build (build/)
+make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/main_floppy.img test.txt
 ```
 
 ### Progression
@@ -156,6 +194,7 @@ make clean   # supprime le dossier de build (build/)
 | 1 | Secteur d'amorçage, "Hello World" avec l'interruption BIOS `int 0x10` | [docs/day01-tests.md](docs/day01-tests.md) |
 | 2 | Séparation bootloader / kernel, image disquette FAT12 | [docs/day02.md](docs/day02.md) |
 | 3 | Lecture du disque : LBA vers CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
+| 4 | Le système de fichiers FAT12, lecture d'un fichier en C | [docs/day04.md](docs/day04.md) |
 
 ---
 
@@ -249,3 +288,36 @@ Les disquettes sont peu fiables, donc le bootloader réessaie jusqu'à 3 fois en
 
 #### 5. `cli` avant `hlt`
 `cli` désactive les interruptions pour que `hlt` arrête vraiment le processeur.
+
+---
+
+### Jour 4 : ce que j'ai appris
+
+![Jour 4 : lecture de test.txt dans l'image FAT12](docs/images/day04-exo2-read-test.png)
+
+#### 1. Un système de fichiers, c'est quoi ?
+C'est la manière d'organiser les données sur un support, comme le classement d'une bibliothèque. FAT12 est très simple, c'est pourquoi on l'utilise pour les disquettes et pour commencer.
+
+#### 2. Les 4 régions d'un disque FAT12
+Les secteurs réservés (boot sector et en-tête), la table FAT (deux copies), le répertoire racine (la liste des fichiers) et la zone de données (le contenu des fichiers).
+
+#### 3. Retrouver un fichier
+Calculer où commence le répertoire racine, le lire, trouver l'entrée dont le nom de 11 caractères correspond, prendre son premier cluster, le convertir en secteur (`début de la zone de données + (cluster - 2) * secteurs par cluster`), le lire, puis suivre la table FAT vers le cluster suivant jusqu'à `0xFF8` ou plus.
+
+#### 4. Les entrées FAT12 font 12 bits
+Pour le cluster `n`, l'entrée commence à l'octet `n * 3 / 2`. Si `n` est pair je garde les 12 bits de poids faible, sinon je décale de 4 vers la droite.
+
+#### 5. Un outil en C pour tester la logique
+`tools/fat/fat.c` lit un fichier dans l'image sur mon PC : `./build/tools/fat build/main_floppy.img test.txt`. Au jour 5, je traduirai la même logique en assembleur pour que le bootloader charge `kernel.bin` tout seul.
+
+#### 6. Plan de ma disquette (LBA)
+
+| Zone | Début (LBA) | Taille (secteurs) |
+|------|-------------|-------------------|
+| Secteur de boot (réservé) | 0 | 1 |
+| FAT 1 | 1 | 9 |
+| FAT 2 | 10 | 9 |
+| Répertoire racine | 19 | 14 |
+| Zone de données (cluster 2) | 33 | 2847 |
+
+`kernel.bin` est le cluster 2 (secteur 33), `test.txt` est le cluster 3 (secteur 34).
