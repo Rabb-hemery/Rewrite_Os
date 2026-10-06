@@ -35,6 +35,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 2 | Bootloader / kernel split, FAT12 floppy image | [docs/day02.md](docs/day02.md) |
 | 3 | Reading the disk: LBA to CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 | 4 | The FAT12 file system, reading a file in C | [docs/day04.md](docs/day04.md) |
+| 5 | The bootloader loads the kernel from FAT12 | [docs/day05.md](docs/day05.md) |
 
 ---
 
@@ -164,6 +165,21 @@ For cluster `n`, the entry starts at byte `n * 3 / 2`. If `n` is even I keep the
 
 ---
 
+### Day 5: what I learned
+
+![Day 5: Hello world from KERNEL!](docs/images/day05-kernel-loaded.png)
+
+#### 1. The bootloader loads the kernel by itself
+It now does in assembly what my C program did on day 4: compute where the root directory is and read it, look for the 11-character name `KERNEL  BIN` (`repe cmpsb`), take its first cluster, read the FAT table, then load the file cluster by cluster, following the 12-bit FAT chain until `0xFF8`.
+
+#### 2. Handing over control
+The kernel is loaded at `0x2000:0000` (physical `0x20000`), in the large free area of real-mode memory. The bootloader sets `ds` and `es` to `0x2000`, keeps the boot drive in `dl` and does a far jump. That is why the kernel is assembled with `org 0`.
+
+#### 3. Limits I know about
+`add ax, 31` only works on a 1.44 MB floppy, and `add bx, 512` overflows past 64 KB. Only 46 bytes are left in the boot sector, which is why the next step is a second stage.
+
+---
+
 ## <a id="french"></a> 🇫🇷 Version Française
 
 Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l'architecture x86, en suivant la série *Building an OS* de nanobyte. Objectif : faire un petit pas par jour sur environ 3 mois, avec mes propres notes pour chaque étape.
@@ -195,6 +211,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 2 | Séparation bootloader / kernel, image disquette FAT12 | [docs/day02.md](docs/day02.md) |
 | 3 | Lecture du disque : LBA vers CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 | 4 | Le système de fichiers FAT12, lecture d'un fichier en C | [docs/day04.md](docs/day04.md) |
+| 5 | Le bootloader charge le kernel depuis FAT12 | [docs/day05.md](docs/day05.md) |
 
 ---
 
@@ -321,3 +338,18 @@ Pour le cluster `n`, l'entrée commence à l'octet `n * 3 / 2`. Si `n` est pair 
 | Zone de données (cluster 2) | 33 | 2847 |
 
 `kernel.bin` est le cluster 2 (secteur 33), `test.txt` est le cluster 3 (secteur 34).
+
+---
+
+### Jour 5 : ce que j'ai appris
+
+![Jour 5 : Hello world from KERNEL!](docs/images/day05-kernel-loaded.png)
+
+#### 1. Le bootloader charge le kernel tout seul
+Il fait maintenant en assembleur ce que mon programme en C faisait au jour 4 : calculer où est le répertoire racine et le lire, chercher le nom de 11 caractères `KERNEL  BIN` (`repe cmpsb`), prendre son premier cluster, lire la table FAT, puis charger le fichier cluster par cluster en suivant la chaîne FAT de 12 bits jusqu'à `0xFF8`.
+
+#### 2. Passer la main
+Le kernel est chargé à `0x2000:0000` (adresse physique `0x20000`), dans la grande zone libre du mode réel. Le bootloader met `ds` et `es` à `0x2000`, garde le lecteur de démarrage dans `dl` et fait un saut lointain. C'est pourquoi le kernel est assemblé avec `org 0`.
+
+#### 3. Les limites que je connais
+`add ax, 31` ne marche que sur une disquette de 1,44 Mo, et `add bx, 512` déborde au-delà de 64 Ko. Il ne reste que 46 octets dans le boot sector, c'est pourquoi la suite est une seconde étape (stage 2).

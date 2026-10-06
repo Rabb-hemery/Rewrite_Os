@@ -24,7 +24,7 @@ bdb_hidden_sectors:         dd 0
 bdb_large_sector_count:     dd 0
 
 ; Extended boot record
-ebr_drive_number:           db 0                ; rempli par le code (numéro du lecteur donné par le BIOS)
+ebr_drive_number:           db 0                ; rempli par le code (lecteur de démarrage)
                             db 0                ; réservé
 ebr_signature:              db 29h
 ebr_volume_id:              db 12h, 34h, 56h, 78h
@@ -66,19 +66,124 @@ main:
     mov ss, ax
     mov sp, 0x7C00
 
+    ; Certains BIOS lancent le bootloader en 07C0:0000 au lieu de 0000:7C00.
+    ; Un retour lointain (retf) force CS = 0.
+    push es
+    push word .after
+    retf
+.after:
+
     ; Le BIOS met le numéro du lecteur de démarrage dans DL
     mov [ebr_drive_number], dl
 
-    ; Lire le secteur LBA 1 vers la mémoire à l'adresse es:bx = 0x0000:0x7E00
-    mov ax, 5000               ; LBA = 1
-    mov cl, 1               ; nombre de secteurs à lire
-    mov bx, 0x7E00          ; destination
+    ; --- Calculer la position du répertoire racine : réservés + FAT * secteurs_par_FAT ---
+    mov ax, [bdb_sectors_per_fat]
+    mov bl, [bdb_fat_count]
+    xor bh, bh
+    mul bx                              ; ax = secteurs_par_FAT * nombre_de_FAT
+    add ax, [bdb_reserved_sectors]      ; ax = LBA du répertoire racine
+    push ax
+
+    ; --- Calculer sa taille en secteurs : (entrées * 32) / octets_par_secteur, arrondi au supérieur ---
+    mov ax, [bdb_dir_entries_count]
+    shl ax, 5                           ; ax = entrées * 32
+    xor dx, dx
+    div word [bdb_bytes_per_sector]
+    test dx, dx
+    jz .root_dir_after
+    inc ax                              ; reste non nul : un secteur de plus
+.root_dir_after:
+
+    ; --- Lire le répertoire racine ---
+    mov cl, al                          ; cl = nombre de secteurs à lire
+    pop ax                              ; ax = LBA du répertoire racine
+    mov dl, [ebr_drive_number]
+    mov bx, buffer
     call disk_read
 
-    mov si, msg_read_ok
-    call puts
+    ; --- Chercher kernel.bin ---
+    xor bx, bx                          ; bx = numéro de l'entrée en cours
+    mov di, buffer                      ; di = entrée en cours (le nom est le premier champ)
+.search_kernel:
+    mov si, file_kernel_bin
+    mov cx, 11                          ; un nom FAT fait 11 caractères
+    push di
+    repe cmpsb                          ; compare ds:si et es:di tant qu'ils sont égaux
+    pop di
+    je .found_kernel
 
-    cli                     ; désactive les interruptions pour que hlt reste arrêté
+    add di, 32                          ; entrée suivante (32 octets)
+    inc bx
+    cmp bx, [bdb_dir_entries_count]
+    jl .search_kernel
+
+    jmp kernel_not_found_error
+
+.found_kernel:
+    mov ax, [di + 26]                   ; premier cluster (à l'offset 26 de l'entrée)
+    mov [kernel_cluster], ax
+
+    ; --- Lire la table FAT en mémoire ---
+    mov ax, [bdb_reserved_sectors]
+    mov bx, buffer
+    mov cl, [bdb_sectors_per_fat]
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    ; --- Charger le kernel cluster par cluster ---
+    mov bx, KERNEL_LOAD_SEGMENT
+    mov es, bx
+    mov bx, KERNEL_LOAD_OFFSET
+
+.load_kernel_loop:
+    ; cluster -> secteur : début des données + (cluster - 2). Pour une disquette
+    ; 1,44 Mo, les données commencent au secteur 33, donc secteur = cluster + 31.
+    mov ax, [kernel_cluster]
+    add ax, 31
+
+    mov cl, 1
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    add bx, [bdb_bytes_per_sector]      ; attention : déborde au-delà de 64 Ko
+
+    ; --- Cluster suivant, avec la table FAT12 (entrées de 12 bits) ---
+    mov ax, [kernel_cluster]
+    mov cx, 3
+    mul cx
+    mov cx, 2
+    div cx                              ; ax = cluster * 3 / 2, dx = cluster % 2
+
+    mov si, buffer
+    add si, ax
+    mov ax, [ds:si]                     ; lit 16 bits à partir de cet octet
+
+    or dx, dx
+    jz .even
+.odd:
+    shr ax, 4                           ; cluster impair : 12 bits de poids fort
+    jmp .next_cluster_after
+.even:
+    and ax, 0x0FFF                      ; cluster pair : 12 bits de poids faible
+
+.next_cluster_after:
+    cmp ax, 0x0FF8                      ; >= 0xFF8 : fin de la chaîne
+    jae .read_finish
+
+    mov [kernel_cluster], ax
+    jmp .load_kernel_loop
+
+.read_finish:
+    ; Sauter dans le kernel
+    mov dl, [ebr_drive_number]          ; on passe le lecteur de démarrage au kernel
+    mov ax, KERNEL_LOAD_SEGMENT
+    mov ds, ax
+    mov es, ax
+    jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+
+    jmp wait_key_and_reboot             ; ne devrait jamais arriver
+
+    cli
     hlt
 
 ;
@@ -89,10 +194,15 @@ floppy_error:
     call puts
     jmp wait_key_and_reboot
 
+kernel_not_found_error:
+    mov si, msg_kernel_not_found
+    call puts
+    jmp wait_key_and_reboot
+
 wait_key_and_reboot:
     mov ah, 0
-    int 16h                 ; attend l'appui sur une touche
-    jmp 0FFFFh:0            ; saute au début du BIOS = redémarrage
+    int 16h                             ; attend l'appui sur une touche
+    jmp 0FFFFh:0                        ; saute au début du BIOS = redémarrage
 
 .halt:
     cli
@@ -103,43 +213,32 @@ wait_key_and_reboot:
 ; Routines disque
 ;
 
-;
-; Convertit une adresse LBA en adresse CHS
-; Entrée : ax = adresse LBA
-; Sortie : cx [bits 0-5]  = numéro de secteur
-;          cx [bits 6-15] = numéro de cylindre
-;          dh             = numéro de tête
-;
+; Convertit une adresse LBA en CHS
+; Entrée : ax = LBA
+; Sortie : cx [bits 0-5] = secteur, cx [bits 6-15] = cylindre, dh = tête
 lba_to_chs:
     push ax
     push dx
 
-    xor dx, dx                          ; dx = 0
-    div word [bdb_sectors_per_track]    ; ax = LBA / secteurs_par_piste
-                                        ; dx = LBA % secteurs_par_piste
-    inc dx                              ; dx = secteur (commence à 1)
-    mov cx, dx                          ; cx = secteur
+    xor dx, dx
+    div word [bdb_sectors_per_track]    ; ax = LBA / secteurs_par_piste, dx = LBA % secteurs_par_piste
+    inc dx                              ; dx = secteur
+    mov cx, dx
 
-    xor dx, dx                          ; dx = 0
-    div word [bdb_heads]                ; ax = cylindre
-                                        ; dx = tête
-    mov dh, dl                          ; dh = tête
-    mov ch, al                          ; ch = 8 bits de poids faible du cylindre
+    xor dx, dx
+    div word [bdb_heads]                ; ax = cylindre, dx = tête
+    mov dh, dl
+    mov ch, al
     shl ah, 6
-    or cl, ah                           ; 2 bits de poids fort du cylindre dans cl
+    or cl, ah
 
     pop ax
-    mov dl, al                          ; restaure dl seulement (dh est la sortie)
+    mov dl, al                          ; restaure dl seulement
     pop ax
     ret
 
-;
 ; Lit des secteurs sur le disque
-; Entrées : ax = adresse LBA
-;           cl = nombre de secteurs à lire (jusqu'à 128)
-;           dl = numéro du lecteur
-;           es:bx = adresse mémoire de destination
-;
+; Entrées : ax = LBA, cl = nombre de secteurs (jusqu'à 128), dl = lecteur, es:bx = destination
 disk_read:
     push ax
     push bx
@@ -147,20 +246,20 @@ disk_read:
     push dx
     push di
 
-    push cx                 ; sauvegarde cl (nombre de secteurs)
+    push cx
     call lba_to_chs
-    pop ax                  ; al = nombre de secteurs
+    pop ax                              ; al = nombre de secteurs
 
     mov ah, 02h
-    mov di, 3               ; 3 tentatives (les disquettes sont peu fiables)
+    mov di, 3                           ; 3 tentatives
 
 .retry:
-    pusha                   ; sauvegarde tous les registres
-    stc                     ; certains BIOS ne positionnent pas CF
+    pusha
+    stc
     int 13h
-    jnc .done               ; CF = 0 : lecture réussie
+    jnc .done
 
-    popa                    ; échec : restaure, réinitialise le contrôleur, réessaie
+    popa
     call disk_reset
 
     dec di
@@ -168,7 +267,7 @@ disk_read:
     jnz .retry
 
 .fail:
-    jmp floppy_error        ; toutes les tentatives ont échoué
+    jmp floppy_error
 
 .done:
     popa
@@ -179,10 +278,7 @@ disk_read:
     pop ax
     ret
 
-;
-; Réinitialise le contrôleur de disque
-; Entrée : dl = numéro du lecteur
-;
+; Réinitialise le contrôleur de disque (dl = lecteur)
 disk_reset:
     pusha
     mov ah, 0
@@ -192,8 +288,15 @@ disk_reset:
     popa
     ret
 
-msg_read_ok:        db 'Read from disk!', ENDL, 0
-msg_read_failed:    db 'Read from disk failed!', ENDL, 0
+msg_read_failed:        db 'Read from disk failed!', ENDL, 0
+msg_kernel_not_found:   db 'KERNEL.BIN not found!', ENDL, 0
+file_kernel_bin:        db 'KERNEL  BIN'
+kernel_cluster:         dw 0
+
+KERNEL_LOAD_SEGMENT     equ 0x2000
+KERNEL_LOAD_OFFSET      equ 0
 
 times 510-($-$$) db 0
 dw 0AA55h
+
+buffer:
