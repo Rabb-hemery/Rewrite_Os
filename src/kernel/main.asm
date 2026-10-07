@@ -34,6 +34,5 @@ puts:
     pop ax
     pop si
     ret
-    
-times 1200-($-$$) db 0
+
 msg_hello: db 'Hello world from KERNEL!', ENDL, 0

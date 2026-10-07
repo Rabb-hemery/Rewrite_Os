@@ -101,27 +101,27 @@ main:
     mov bx, buffer
     call disk_read
 
-    ; --- Chercher kernel.bin ---
+    ; --- Chercher stage2.bin ---
     xor bx, bx                          ; bx = numéro de l'entrée en cours
     mov di, buffer                      ; di = entrée en cours (le nom est le premier champ)
-.search_kernel:
-    mov si, file_kernel_bin
+.search_stage2:
+    mov si, file_stage2_bin
     mov cx, 11                          ; un nom FAT fait 11 caractères
     push di
     repe cmpsb                          ; compare ds:si et es:di tant qu'ils sont égaux
     pop di
-    je .found_kernel
+    je .found_stage2
 
     add di, 32                          ; entrée suivante (32 octets)
     inc bx
     cmp bx, [bdb_dir_entries_count]
-    jl .search_kernel
+    jl .search_stage2
 
-    jmp kernel_not_found_error
+    jmp stage2_not_found_error
 
-.found_kernel:
+.found_stage2:
     mov ax, [di + 26]                   ; premier cluster (à l'offset 26 de l'entrée)
-    mov [kernel_cluster], ax
+    mov [stage2_cluster], ax
 
     ; --- Lire la table FAT en mémoire ---
     mov ax, [bdb_reserved_sectors]
@@ -130,15 +130,15 @@ main:
     mov dl, [ebr_drive_number]
     call disk_read
 
-    ; --- Charger le kernel cluster par cluster ---
-    mov bx, KERNEL_LOAD_SEGMENT
+    ; --- Charger stage2 cluster par cluster ---
+    mov bx, STAGE2_LOAD_SEGMENT
     mov es, bx
-    mov bx, KERNEL_LOAD_OFFSET
+    mov bx, STAGE2_LOAD_OFFSET
 
-.load_kernel_loop:
+.load_stage2_loop:
     ; cluster -> secteur : début des données + (cluster - 2). Pour une disquette
     ; 1,44 Mo, les données commencent au secteur 33, donc secteur = cluster + 31.
-    mov ax, [kernel_cluster]
+    mov ax, [stage2_cluster]
     add ax, 31
 
     mov cl, 1
@@ -148,7 +148,7 @@ main:
     add bx, [bdb_bytes_per_sector]      ; attention : déborde au-delà de 64 Ko
 
     ; --- Cluster suivant, avec la table FAT12 (entrées de 12 bits) ---
-    mov ax, [kernel_cluster]
+    mov ax, [stage2_cluster]
     mov cx, 3
     mul cx
     mov cx, 2
@@ -170,16 +170,16 @@ main:
     cmp ax, 0x0FF8                      ; >= 0xFF8 : fin de la chaîne
     jae .read_finish
 
-    mov [kernel_cluster], ax
-    jmp .load_kernel_loop
+    mov [stage2_cluster], ax
+    jmp .load_stage2_loop
 
 .read_finish:
-    ; Sauter dans le kernel
-    mov dl, [ebr_drive_number]          ; on passe le lecteur de démarrage au kernel
-    mov ax, KERNEL_LOAD_SEGMENT
+    ; Sauter dans stage2
+    mov dl, [ebr_drive_number]          ; on passe le lecteur de démarrage à stage2
+    mov ax, STAGE2_LOAD_SEGMENT
     mov ds, ax
     mov es, ax
-    jmp KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+    jmp STAGE2_LOAD_SEGMENT:STAGE2_LOAD_OFFSET
 
     jmp wait_key_and_reboot             ; ne devrait jamais arriver
 
@@ -194,8 +194,8 @@ floppy_error:
     call puts
     jmp wait_key_and_reboot
 
-kernel_not_found_error:
-    mov si, msg_kernel_not_found
+stage2_not_found_error:
+    mov si, msg_stage2_not_found
     call puts
     jmp wait_key_and_reboot
 
@@ -289,12 +289,12 @@ disk_reset:
     ret
 
 msg_read_failed:        db 'Read from disk failed!', ENDL, 0
-msg_kernel_not_found:   db 'KERNEL.BIN not found!', ENDL, 0
-file_kernel_bin:        db 'KERNEL  BIN'
-kernel_cluster:         dw 0
+msg_stage2_not_found:   db 'STAGE2.BIN not found!', ENDL, 0
+file_stage2_bin:        db 'STAGE2  BIN'
+stage2_cluster:         dw 0
 
-KERNEL_LOAD_SEGMENT     equ 0x2000
-KERNEL_LOAD_OFFSET      equ 0
+STAGE2_LOAD_SEGMENT     equ 0x2000
+STAGE2_LOAD_OFFSET      equ 0
 
 times 510-($-$$) db 0
 dw 0AA55h
