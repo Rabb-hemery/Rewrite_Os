@@ -180,6 +180,14 @@ The kernel is loaded at `0x2000:0000` (physical `0x20000`), in the large free ar
 
 ---
 
+### Credits and license
+
+- This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
+- Reference documentation: the OSDev wiki (FAT file system) and Ralf Brown's Interrupt List.
+- Released under the **MIT license**, see [LICENSE](LICENSE). If you reuse code that comes from the original tutorial, check the license of the original repository too.
+
+---
+
 ## <a id="french"></a> 🇫🇷 Version Française
 
 Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l'architecture x86, en suivant la série *Building an OS* de nanobyte. Objectif : faire un petit pas par jour sur environ 3 mois, avec mes propres notes pour chaque étape.
@@ -353,3 +361,11 @@ Le kernel est chargé à `0x2000:0000` (adresse physique `0x20000`), dans la gra
 
 #### 3. Les limites que je connais
 `add ax, 31` ne marche que sur une disquette de 1,44 Mo, et `add bx, 512` déborde au-delà de 64 Ko. Il ne reste que 46 octets dans le boot sector, c'est pourquoi la suite est une seconde étape (stage 2).
+
+---
+
+### Crédits et licence
+
+- Ce projet suit la série de vidéos **« Building an OS »** de [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). Les explications, le journal et les tests sont mes propres notes.
+- Documentation de référence : le wiki OSDev (système de fichiers FAT) et la liste d'interruptions de Ralf Brown.
+- Publié sous **licence MIT**, voir [LICENSE](LICENSE). Si tu réutilises du code issu du tutoriel d'origine, vérifie aussi la licence du dépôt d'origine.
