@@ -38,6 +38,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 4 | The FAT12 file system, reading a file in C | [docs/day04.md](docs/day04.md) |
 | 5 | The bootloader loads the kernel from FAT12 | [docs/day05.md](docs/day05.md) |
 | 6 | Two-stage bootloader, stage 2 in C (Open Watcom) | [docs/day06.md](docs/day06.md) |
+| 7 | `printf` from scratch: varargs, state machine, 64-bit division | [docs/day07.md](docs/day07.md) |
 
 ---
 
@@ -203,6 +204,27 @@ C cannot call a BIOS interrupt, so `x86_Video_WriteCharTeletype` is in assembly 
 
 ---
 
+### Day 7: what I learned
+
+![Day 7: my printf](docs/images/day07-printf.png)
+
+#### 1. Variable arguments on the stack
+With cdecl, arguments are pushed right to left, so the first one (`fmt`) is always at the same place. I take its address (`argp = (int*) &fmt`) and move forward one word per argument: a `char` or `short` takes 1 word (2 bytes in 16-bit mode), a `long` takes 2, a `long long` takes 4.
+
+#### 2. A state machine to read the format
+`NORMAL` prints characters until a `%`, then `LENGTH` (`h`, `hh`, `l`, `ll`), then `SPEC` (`c`, `s`, `d`, `i`, `u`, `x`, `p`, `o`, `%`). An unknown specifier is ignored.
+
+#### 3. Printing a number in any base
+Divide by the base repeatedly: each remainder is a digit (looked up in `"0123456789abcdef"`), and the digits come out in reverse order.
+
+#### 4. The 64-bit division problem
+In 16-bit real mode the CPU can divide at most 64 bits by 32 bits, with a 32-bit quotient. The compiler asked for a library function I do not have, so I wrote `x86_div64_32` in assembly: two 32-bit divisions in a row (long division in base 2³²).
+
+#### 5. Same bits, different meaning
+`printf("%d %u", -1, -1)` prints `-1 65535`: in 16 bits, `-1` is `0xFFFF`, read as signed or unsigned.
+
+---
+
 ### Credits and license
 
 - This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
@@ -245,6 +267,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 4 | Le système de fichiers FAT12, lecture d'un fichier en C | [docs/day04.md](docs/day04.md) |
 | 5 | Le bootloader charge le kernel depuis FAT12 | [docs/day05.md](docs/day05.md) |
 | 6 | Bootloader en deux étapes, stage 2 en C (Open Watcom) | [docs/day06.md](docs/day06.md) |
+| 7 | `printf` à partir de zéro : arguments variables, machine à états, division 64 bits | [docs/day07.md](docs/day07.md) |
 
 ---
 
@@ -407,6 +430,27 @@ Les arguments sont empilés de droite à gauche, le résultat revient dans `ax`,
 
 #### 5. C et assembleur ensemble
 Le C ne peut pas appeler une interruption BIOS : `x86_Video_WriteCharTeletype` est en assembleur, et `putc` / `puts` en C l'appellent.
+
+---
+
+### Jour 7 : ce que j'ai appris
+
+![Jour 7 : mon printf](docs/images/day07-printf.png)
+
+#### 1. Les arguments variables sur la pile
+Avec cdecl, les arguments sont empilés de droite à gauche, donc le premier (`fmt`) est toujours au même endroit. Je prends son adresse (`argp = (int*) &fmt`) et j'avance d'un mot par argument : un `char` ou un `short` occupe 1 mot (2 octets en mode 16 bits), un `long` 2, un `long long` 4.
+
+#### 2. Une machine à états pour lire le format
+`NORMAL` affiche les caractères jusqu'à un `%`, puis `LENGTH` (`h`, `hh`, `l`, `ll`), puis `SPEC` (`c`, `s`, `d`, `i`, `u`, `x`, `p`, `o`, `%`). Un spécificateur inconnu est ignoré.
+
+#### 3. Afficher un nombre dans n'importe quelle base
+On divise par la base à répétition : chaque reste est un chiffre (cherché dans `"0123456789abcdef"`), et les chiffres sortent à l'envers.
+
+#### 4. Le problème de la division 64 bits
+En mode réel 16 bits, le processeur divise au maximum 64 bits par 32 bits, avec un quotient de 32 bits. Le compilateur demandait une fonction de bibliothèque que je n'ai pas, j'ai donc écrit `x86_div64_32` en assembleur : deux divisions de 32 bits à la suite (la division posée, en base 2³²).
+
+#### 5. Les mêmes bits, un sens différent
+`printf("%d %u", -1, -1)` affiche `-1 65535` : sur 16 bits, `-1` vaut `0xFFFF`, lu en signé ou en non signé.
 
 ---
 
