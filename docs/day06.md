@@ -12,7 +12,9 @@ Séparer le bootloader en deux étapes (stage 1 en assembleur, stage 2 en C), in
 
 ### Résultat
 
-_ajouter ici ta capture de QEMU avec `Hello world from C!` (par exemple `images/day06-hello-c.png`)_
+![QEMU affichant Hello world from C!](images/day06-hello-c.png)
+
+Le message est maintenant écrit par du code **C** (`puts`), chargé par la stage 1 depuis le fichier `stage2.bin` de la disquette.
 
 ### Ce que j'ai compris
 
@@ -52,33 +54,44 @@ Le C ne peut pas appeler une interruption BIOS. J'écris donc en assembleur `x86
 ### Mini-exos
 
 #### Exo 1 : installer Open Watcom
-- **Commandes utilisées :** _à compléter_
-- **Vérification (`wcc` affiche sa bannière) :** _à compléter_
+- **Commandes utilisées :** téléchargement de `ow-snapshot.tar.xz` (la version précompilée d'Open Watcom) avec `curl`, puis extraction avec `sudo tar xf ow-snapshot.tar.xz -C /opt/watcom`.
+- **Vérification :** `/opt/watcom/binl64/wcc | head -3` affiche la bannière `Open Watcom C x86 16-bit Optimizing Compiler`, version 2.0 beta (64-bit). Le compilateur est donc bien installé.
 
 #### Exo 2 : lancer le tout
 - **Commande :** `make run`
-- **Observé :** _à compléter_
+- **Observé :** QEMU affiche `Hello world from C!` (voir la capture plus haut). Le `Warning! W1014: stack segment not found` du linker n'empêche rien.
 
 #### Exo 3 : lire le fichier `.map`
 - **Commande :** `grep -n -i entry build/stage2.map`
-- **Adresse du point d'entrée :** _à compléter_
-- **Taille de `stage2.bin` :** _à compléter_
+- **Adresse du point d'entrée :** `00000000`.
+
+![Le point d'entrée est à l'adresse 0](images/day06-exo3-map-entry.png)
+
+- **Taille de `stage2.bin` :** `Memory size: 00a6`, soit 0xA6 = 166 octets.
+- **Ce que ça veut dire :** le segment `_ENTRY` est tout au début du fichier (adresse 0), donc la stage 1 peut sauter directement sur le premier octet de `stage2.bin` sans lire d'en-tête. `_cstart_` est à `0x26`, `_putc` à `0x3f` et `_puts` à `0x5d`.
 
 #### Exo 4 : modifier le message
 - **Modification :** changer le texte de `puts` dans `main.c` et ajouter une deuxième ligne
-- **Observé :** _à compléter_
+- **Observé :** QEMU affiche mon nouveau texte : `Trying to see if i can change the 'puts', Hello from C!`
+
+![Message modifié](images/day06-exo4-message.png)
+
+- **Ce que ça montre :** le texte vient bien du code C que je viens de recompiler, pas d'un ancien fichier.
 
 #### Exo 5 : l'erreur de la vidéo
 - **Modification :** dans `x86.asm`, remplacer `[bp + 4]` par `[bp + 2]`, puis `make run`
-- **Observé :** _à compléter_
-- **Pourquoi :** _à compléter (que contient `[bp + 2]` ?)_
+- **Observé :** l'écran se remplit de la lettre `T`, une lettre `T` pour chaque caractère du texte.
+
+![Une ligne de T](images/day06-exo5-bp2-bug.png)
+
+- **Pourquoi :** `[bp + 2]` n'est pas le caractère à afficher, c'est l'**adresse de retour** de la fonction (voir la pile : `[bp]` ancien `bp`, `[bp+2]` adresse de retour, `[bp+4]` 1er argument). Le `call` est dans `putc` et revient à l'adresse `0x54` ; son octet de poids faible `0x54` est le code ASCII de la lettre `T`. Chaque appel affiche donc `T`, quel que soit le caractère demandé. Même les retours à la ligne `\r\n` sont remplacés par des `T`, c'est pourquoi tout reste sur la même ligne.
 
 ### Erreurs rencontrées
 
 | Erreur / symptôme | Cause | Solution |
 |-------------------|-------|----------|
 | `Warning! W1014: stack segment not found` | l'éditeur de liens ne trouve pas de segment de pile explicite | sans gravité ici, la vidéo le signale aussi |
-| _à compléter_ | | |
+| Une ligne de `T` à la place du texte | `[bp + 2]` lu au lieu de `[bp + 4]` : on lit l'adresse de retour au lieu de l'argument (exo 5) | revenir à `[bp + 4]` |
 
 ---
 
@@ -90,7 +103,9 @@ Split the bootloader into two stages (stage 1 in assembly, stage 2 in C), instal
 
 ### Result
 
-_add your QEMU screenshot showing `Hello world from C!` here (for example `images/day06-hello-c.png`)_
+![QEMU displaying Hello world from C!](images/day06-hello-c.png)
+
+The message is now written by **C** code (`puts`), loaded by stage 1 from the `stage2.bin` file on the floppy.
 
 ### What I understood
 
@@ -130,30 +145,41 @@ C cannot call a BIOS interrupt. So I wrote `x86_Video_WriteCharTeletype` in asse
 ### Mini-exercises
 
 #### Exercise 1: installing Open Watcom
-- **Commands used:** _to be completed_
-- **Check (`wcc` prints its banner):** _to be completed_
+- **Commands used:** downloaded `ow-snapshot.tar.xz` (the prebuilt Open Watcom) with `curl`, then extracted it with `sudo tar xf ow-snapshot.tar.xz -C /opt/watcom`.
+- **Check:** `/opt/watcom/binl64/wcc | head -3` prints the banner `Open Watcom C x86 16-bit Optimizing Compiler`, version 2.0 beta (64-bit). The compiler is installed.
 
 #### Exercise 2: running it
 - **Command:** `make run`
-- **Observed:** _to be completed_
+- **Observed:** QEMU displays `Hello world from C!` (see the screenshot above). The linker's `Warning! W1014: stack segment not found` does not prevent anything.
 
 #### Exercise 3: reading the `.map` file
 - **Command:** `grep -n -i entry build/stage2.map`
-- **Entry point address:** _to be completed_
-- **Size of `stage2.bin`:** _to be completed_
+- **Entry point address:** `00000000`.
+
+![The entry point is at address 0](images/day06-exo3-map-entry.png)
+
+- **Size of `stage2.bin`:** `Memory size: 00a6`, i.e. 0xA6 = 166 bytes.
+- **What it means:** the `_ENTRY` segment is at the very start of the file (address 0), so stage 1 can jump straight to the first byte of `stage2.bin` without reading any header. `_cstart_` is at `0x26`, `_putc` at `0x3f` and `_puts` at `0x5d`.
 
 #### Exercise 4: changing the message
 - **Change:** edit the text passed to `puts` in `main.c` and add a second line
-- **Observed:** _to be completed_
+- **Observed:** QEMU displays my new text: `Trying to see if i can change the 'puts', Hello from C!`
+
+![Changed message](images/day06-exo4-message.png)
+
+- **What it shows:** the text really comes from the C code I just recompiled, not from an old file.
 
 #### Exercise 5: the video's bug
 - **Change:** in `x86.asm`, replace `[bp + 4]` with `[bp + 2]`, then `make run`
-- **Observed:** _to be completed_
-- **Why:** _to be completed (what does `[bp + 2]` contain?)_
+- **Observed:** the screen fills with the letter `T`, one `T` for each character of the text.
+
+![A line of Ts](images/day06-exo5-bp2-bug.png)
+
+- **Why:** `[bp + 2]` is not the character to print, it is the function's **return address** (see the stack: `[bp]` old `bp`, `[bp+2]` return address, `[bp+4]` 1st argument). The `call` is inside `putc` and returns to address `0x54`; its low byte `0x54` is the ASCII code of the letter `T`. Every call therefore prints `T`, whatever character was requested. Even the `\r\n` line breaks are replaced by `T`s, which is why everything stays on the same line.
 
 ### Errors encountered
 
 | Error / symptom | Cause | Solution |
 |-----------------|-------|----------|
 | `Warning! W1014: stack segment not found` | the linker finds no explicit stack segment | harmless here, the video mentions it too |
-| _to be completed_ | | |
+| A line of `T`s instead of the text | `[bp + 2]` read instead of `[bp + 4]`: the return address is read instead of the argument (exercise 5) | go back to `[bp + 4]` |

@@ -17,6 +17,7 @@ A hobby operating system written from scratch for x86, following the *Building a
 - `qemu-system-i386`: virtual machine to test the OS
 - `dosfstools` (`mkfs.fat`) and `mtools` (`mcopy`, `mdir`): build and inspect the FAT12 floppy image
 - `gcc`: compiler for the small FAT12 reader tool that runs on my PC
+- Open Watcom 2 (`wcc`, `wlink`), installed in `/opt/watcom`: 16-bit C compiler for stage 2 of the bootloader
 - Developed on Arch Linux
 
 ### Build and run
@@ -36,6 +37,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 3 | Reading the disk: LBA to CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 | 4 | The FAT12 file system, reading a file in C | [docs/day04.md](docs/day04.md) |
 | 5 | The bootloader loads the kernel from FAT12 | [docs/day05.md](docs/day05.md) |
+| 6 | Two-stage bootloader, stage 2 in C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 
 ---
 
@@ -180,6 +182,27 @@ The kernel is loaded at `0x2000:0000` (physical `0x20000`), in the large free ar
 
 ---
 
+### Day 6: what I learned
+
+![Day 6: Hello world from C!](docs/images/day06-hello-c.png)
+
+#### 1. Two stages
+The boot sector is too small (only 46 free bytes left), so it now does one job: find `stage2.bin` in the FAT12 root directory and load it. **Stage 2** is written in C and is no longer limited to 512 bytes. The code is split into `src/bootloader/stage1`, `src/bootloader/stage2` and `src/kernel`, each with its own `Makefile`.
+
+#### 2. C in real mode needs Open Watcom
+We are still in 16-bit real mode, and GCC cannot produce that code, but Open Watcom can. Important options: `-ms` (small memory model), `-zl` (no standard library), `-s` (no stack checks).
+
+#### 3. A raw binary with the entry point first
+The linker script (`FORMAT RAW BIN`, `OFFSET=0`, `START=entry`) makes the first byte of `stage2.bin` the entry point, so stage 1 can jump straight into it. In the `.map` file, the entry address must be `0`.
+
+#### 4. The cdecl calling convention
+Arguments are pushed right to left, the result comes back in `ax`, and the caller cleans the stack. Inside a function: `[bp+2]` is the return address and `[bp+4]` the first argument. Reading `[bp+2]` by mistake prints the same letter `T` over and over (the low byte of the return address).
+
+#### 5. C and assembly together
+C cannot call a BIOS interrupt, so `x86_Video_WriteCharTeletype` is in assembly and `putc` / `puts` in C call it.
+
+---
+
 ### Credits and license
 
 - This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
@@ -201,6 +224,7 @@ Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l
 - `qemu-system-i386` : la machine virtuelle pour tester l'OS
 - `dosfstools` (`mkfs.fat`) et `mtools` (`mcopy`, `mdir`) : pour créer et inspecter l'image disquette FAT12
 - `gcc` : compilateur du petit outil de lecture FAT12 qui tourne sur mon PC
+- Open Watcom 2 (`wcc`, `wlink`), installé dans `/opt/watcom` : compilateur C 16 bits pour la stage 2 du bootloader
 - Développé sous Arch Linux
 
 ### Compilation et exécution
@@ -220,6 +244,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 3 | Lecture du disque : LBA vers CHS, `int 0x13` | [docs/day03.md](docs/day03.md) |
 | 4 | Le système de fichiers FAT12, lecture d'un fichier en C | [docs/day04.md](docs/day04.md) |
 | 5 | Le bootloader charge le kernel depuis FAT12 | [docs/day05.md](docs/day05.md) |
+| 6 | Bootloader en deux étapes, stage 2 en C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 
 ---
 
@@ -361,6 +386,27 @@ Le kernel est chargé à `0x2000:0000` (adresse physique `0x20000`), dans la gra
 
 #### 3. Les limites que je connais
 `add ax, 31` ne marche que sur une disquette de 1,44 Mo, et `add bx, 512` déborde au-delà de 64 Ko. Il ne reste que 46 octets dans le boot sector, c'est pourquoi la suite est une seconde étape (stage 2).
+
+---
+
+### Jour 6 : ce que j'ai appris
+
+![Jour 6 : Hello world from C!](docs/images/day06-hello-c.png)
+
+#### 1. Deux étapes
+Le boot sector est trop petit (il ne reste que 46 octets libres), donc il n'a plus qu'un rôle : trouver `stage2.bin` dans le répertoire racine FAT12 et le charger. La **stage 2** est écrite en C et n'a plus la limite des 512 octets. Le code est séparé en `src/bootloader/stage1`, `src/bootloader/stage2` et `src/kernel`, chacun avec son propre `Makefile`.
+
+#### 2. Du C en mode réel demande Open Watcom
+On est toujours en mode réel 16 bits, et GCC ne sait pas produire ce code, alors qu'Open Watcom le sait. Options importantes : `-ms` (modèle mémoire small), `-zl` (pas de bibliothèque standard), `-s` (pas de vérification de pile).
+
+#### 3. Un binaire brut avec le point d'entrée en premier
+Le script d'édition de liens (`FORMAT RAW BIN`, `OFFSET=0`, `START=entry`) fait du premier octet de `stage2.bin` le point d'entrée, donc la stage 1 peut sauter directement dessus. Dans le fichier `.map`, l'adresse d'entrée doit être `0`.
+
+#### 4. La convention d'appel cdecl
+Les arguments sont empilés de droite à gauche, le résultat revient dans `ax`, et l'appelant nettoie la pile. Dans une fonction : `[bp+2]` est l'adresse de retour et `[bp+4]` le premier argument. Lire `[bp+2]` par erreur affiche toujours la même lettre `T` (l'octet de poids faible de l'adresse de retour).
+
+#### 5. C et assembleur ensemble
+Le C ne peut pas appeler une interruption BIOS : `x86_Video_WriteCharTeletype` est en assembleur, et `putc` / `puts` en C l'appellent.
 
 ---
 
