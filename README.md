@@ -39,6 +39,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 5 | The bootloader loads the kernel from FAT12 | [docs/day05.md](docs/day05.md) |
 | 6 | Two-stage bootloader, stage 2 in C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 | 7 | `printf` from scratch: varargs, state machine, 64-bit division | [docs/day07.md](docs/day07.md) |
+| 8 | Reading the disk from C: BIOS wrappers, DISK layer | [docs/day08.md](docs/day08.md) |
 
 ---
 
@@ -225,6 +226,27 @@ In 16-bit real mode the CPU can divide at most 64 bits by 32 bits, with a 32-bit
 
 ---
 
+### Day 8: what I learned
+
+![Day 8: disk geometry and root directory read from C](docs/images/day08-disk.png)
+
+#### 1. A `DISK` structure instead of globals
+Everything about a disk (drive number, cylinders, heads, sectors) lives in a `DISK` structure passed to each function, so the code does not depend on global state.
+
+#### 2. BIOS calls through assembly wrappers
+C cannot call `int 13h`, so `x86_Disk_Reset`, `x86_Disk_Read` and `x86_Disk_GetDriveParams` are written in assembly. They return a C boolean using `mov ax, 1` then `sbb ax, 0` (1 if the carry flag is clear).
+
+#### 3. The geometry trap
+`int 13h` with `ah = 08h` gives the **highest** cylinder and head numbers, so I add 1 (79 becomes 80 cylinders, 1 becomes 2 heads). Without that, LBA 19 is read from sector 37 and the root directory is garbage.
+
+#### 4. Compiler helpers
+Dividing or multiplying 32-bit numbers in 16-bit mode makes the compiler call `__U4D` and `__U4M`. With the library disabled (`-zl`), I write them in assembly.
+
+#### 5. A build lesson
+After replacing files with a zip, `make clean` first: old object files can look up to date and get linked with new ones.
+
+---
+
 ### Credits and license
 
 - This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
@@ -268,6 +290,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 5 | Le bootloader charge le kernel depuis FAT12 | [docs/day05.md](docs/day05.md) |
 | 6 | Bootloader en deux étapes, stage 2 en C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 | 7 | `printf` à partir de zéro : arguments variables, machine à états, division 64 bits | [docs/day07.md](docs/day07.md) |
+| 8 | Lire le disque depuis le C : enveloppes BIOS, couche DISK | [docs/day08.md](docs/day08.md) |
 
 ---
 
@@ -451,6 +474,27 @@ En mode réel 16 bits, le processeur divise au maximum 64 bits par 32 bits, avec
 
 #### 5. Les mêmes bits, un sens différent
 `printf("%d %u", -1, -1)` affiche `-1 65535` : sur 16 bits, `-1` vaut `0xFFFF`, lu en signé ou en non signé.
+
+---
+
+### Jour 8 : ce que j'ai appris
+
+![Jour 8 : géométrie du disque et répertoire racine lus depuis le C](docs/images/day08-disk.png)
+
+#### 1. Une structure `DISK` plutôt que des variables globales
+Tout ce qui concerne un disque (numéro du lecteur, cylindres, têtes, secteurs) est dans une structure `DISK` passée à chaque fonction, donc le code ne dépend d'aucun état global.
+
+#### 2. Les appels BIOS passent par des enveloppes en assembleur
+Le C ne sait pas appeler `int 13h` : `x86_Disk_Reset`, `x86_Disk_Read` et `x86_Disk_GetDriveParams` sont écrites en assembleur. Elles retournent un booléen C avec `mov ax, 1` puis `sbb ax, 0` (1 si le flag de retenue est à 0).
+
+#### 3. Le piège de la géométrie
+`int 13h` avec `ah = 08h` donne les **plus grands** numéros de cylindre et de tête, donc j'ajoute 1 (79 devient 80 cylindres, 1 devient 2 têtes). Sans cela, le LBA 19 est lu au secteur 37 et le répertoire racine est illisible.
+
+#### 4. Les aides du compilateur
+Diviser ou multiplier des nombres de 32 bits en mode 16 bits fait appeler `__U4D` et `__U4M` par le compilateur. Avec la bibliothèque désactivée (`-zl`), je les écris en assembleur.
+
+#### 5. Une leçon sur la compilation
+Après avoir remplacé des fichiers avec un zip, faire `make clean` d'abord : d'anciens fichiers objets peuvent sembler à jour et être liés avec des nouveaux.
 
 ---
 
