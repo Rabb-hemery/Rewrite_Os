@@ -40,6 +40,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 6 | Two-stage bootloader, stage 2 in C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 | 7 | `printf` from scratch: varargs, state machine, 64-bit division | [docs/day07.md](docs/day07.md) |
 | 8 | Reading the disk from C: BIOS wrappers, DISK layer | [docs/day08.md](docs/day08.md) |
+| 9 | The FAT driver in stage 2: open, read, paths | [docs/day09.md](docs/day09.md) |
 
 ---
 
@@ -247,6 +248,27 @@ After replacing files with a zip, `make clean` first: old object files can look 
 
 ---
 
+### Day 9: what I learned
+
+![Day 9: root directory and file read by the FAT driver](docs/images/day09-fat.png)
+
+#### 1. A `stdio.h`-like interface
+`FAT_Open` returns a handle (the index of a slot in a table of 10 open files), then `FAT_Read`, `FAT_ReadEntry` and `FAT_Close`. The disk is passed to each function.
+
+#### 2. No `malloc`: I choose where the memory goes
+The big buffers live in a `FAT_Data` structure at a fixed address (segment `0x0050`, physical `0x00500`, up to 64 KB), followed by the FAT table. It is outside stage 2's segment, hence **far** pointers.
+
+#### 3. One 512-byte buffer per file
+The disk reads whole sectors, but `FAT_Read` can return any number of bytes. The next sector is loaded when the buffer is used up, following the 12-bit FAT chain until `0xFF8`.
+
+#### 4. Paths and 8.3 names
+`FAT_Open("mydir/test.txt")` splits the path at each `/`, finds each element in the current directory (`test.txt` becomes `TEST    TXT`), and opens it. The root directory is a special case: it is not in the FAT.
+
+#### 5. A bug I found
+With more than 16 files in the root directory, a search that reads a later sector leaves the buffer on that sector, and the next open fails. `FAT_Open` therefore reloads the root directory's first sector on each call.
+
+---
+
 ### Credits and license
 
 - This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
@@ -291,6 +313,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 6 | Bootloader en deux étapes, stage 2 en C (Open Watcom) | [docs/day06.md](docs/day06.md) |
 | 7 | `printf` à partir de zéro : arguments variables, machine à états, division 64 bits | [docs/day07.md](docs/day07.md) |
 | 8 | Lire le disque depuis le C : enveloppes BIOS, couche DISK | [docs/day08.md](docs/day08.md) |
+| 9 | Le pilote FAT dans la stage 2 : ouvrir, lire, chemins | [docs/day09.md](docs/day09.md) |
 
 ---
 
@@ -495,6 +518,27 @@ Diviser ou multiplier des nombres de 32 bits en mode 16 bits fait appeler `__U4D
 
 #### 5. Une leçon sur la compilation
 Après avoir remplacé des fichiers avec un zip, faire `make clean` d'abord : d'anciens fichiers objets peuvent sembler à jour et être liés avec des nouveaux.
+
+---
+
+### Jour 9 : ce que j'ai appris
+
+![Jour 9 : répertoire racine et fichier lus par le pilote FAT](docs/images/day09-fat.png)
+
+#### 1. Une interface proche de `stdio.h`
+`FAT_Open` rend une poignée (l'indice d'un emplacement dans un tableau de 10 fichiers ouverts), puis `FAT_Read`, `FAT_ReadEntry` et `FAT_Close`. Le disque est passé à chaque fonction.
+
+#### 2. Pas de `malloc` : je choisis où va la mémoire
+Les gros tampons sont dans une structure `FAT_Data` à une adresse fixe (segment `0x0050`, physique `0x00500`, 64 Ko au maximum), suivie de la table FAT. C'est en dehors du segment de la stage 2, d'où les pointeurs **far**.
+
+#### 3. Un tampon de 512 octets par fichier
+Le disque lit des secteurs entiers, mais `FAT_Read` peut rendre n'importe quel nombre d'octets. Le secteur suivant est chargé quand le tampon est épuisé, en suivant la chaîne FAT de 12 bits jusqu'à `0xFF8`.
+
+#### 4. Chemins et noms 8.3
+`FAT_Open("mydir/test.txt")` découpe le chemin à chaque `/`, retrouve chaque élément dans le dossier courant (`test.txt` devient `TEST    TXT`) et l'ouvre. La racine est un cas particulier : elle n'est pas dans la FAT.
+
+#### 5. Un bug que j'ai trouvé
+Avec plus de 16 fichiers à la racine, une recherche qui lit un secteur plus loin laisse le tampon sur ce secteur, et l'ouverture suivante échoue. `FAT_Open` recharge donc le premier secteur de la racine à chaque appel.
 
 ---
 

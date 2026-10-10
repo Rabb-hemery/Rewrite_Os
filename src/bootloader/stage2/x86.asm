@@ -224,8 +224,8 @@ _x86_Disk_GetDriveParams:
 ; __U4D : division non signée de 32 bits par 32 bits
 ;   entrée : dividende dans dx:ax, diviseur dans cx:bx
 ;   sortie : quotient dans dx:ax, reste dans cx:bx
-global __U4D_OFF
-__U4D_OFF:
+global __U4D
+__U4D:
     shl edx, 16                 ; dx dans la moitié haute de edx
     mov dx, ax                  ; edx = dividende
     mov eax, edx                ; eax = dividende

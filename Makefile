@@ -22,6 +22,10 @@ $(BUILD_DIR)/main_floppy.img: stage1 stage2 kernel
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/stage2.bin "::stage2.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::test.txt"
+	mmd -i $(BUILD_DIR)/main_floppy.img "::mydir"
+	mcopy -i $(BUILD_DIR)/main_floppy.img test.txt "::mydir/test.txt"
+	seq 1 2000 > $(BUILD_DIR)/bigfile.txt
+	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/bigfile.txt "::bigfile.txt"
 
 #
 # Bootloader (en deux étapes)
