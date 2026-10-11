@@ -1,5 +1,13 @@
 # Rewrite_OS
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="banners/rewrite_os-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="banners/rewrite_os-light.svg">
+    <img alt="REWRITE_OS" src="banners/rewrite_os-dark.svg" width="100%">
+  </picture>
+</p>
+
 [English Version](#english) | [Version Française](#french)
 
 ---
