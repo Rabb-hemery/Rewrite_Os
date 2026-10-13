@@ -3,52 +3,52 @@
 #include "disk.h"
 #include "fat.h"
 
+/* Lit tout le fichier par morceaux de `chunk` octets et compare la longueur et la somme des octets
+   avec les valeurs attendues (calculées sur le PC avec Python ou sum). */
+static void check(DISK* disk, const char* path, uint16_t chunk, uint32_t expectedLen, uint32_t expectedSum)
+{
+    uint8_t buf[512];
+    uint32_t total = 0, sum = 0, got;
+    FAT_File far* fd = FAT_Open(disk, path);
+
+    printf("%s (%u) : ", path, chunk);
+
+    if (fd == NULL)
+    {
+        printf("ECHEC (introuvable)\r\n");
+        return;
+    }
+
+    while ((got = FAT_Read(disk, fd, chunk, buf)))
+    {
+        for (uint32_t i = 0; i < got; i++)
+            sum += buf[i];
+        total += got;
+    }
+    FAT_Close(fd);
+
+    if (total == expectedLen && sum == expectedSum)
+        printf("OK\r\n");
+    else
+        printf("ECHEC (len=%lu sum=%lu)\r\n", total, sum);
+}
+
 void _cdecl cstart_(uint16_t bootDrive)
 {
     DISK disk;
 
-    if (!DISK_Initialize(&disk, bootDrive))
+    if (!DISK_Initialize(&disk, bootDrive) || !FAT_Initialize(&disk))
     {
-        printf("Disk init error\r\n");
+        printf("Init error\r\n");
         goto end;
     }
 
-    if (!FAT_Initialize(&disk))
-    {
-        printf("FAT init error\r\n");
-        goto end;
-    }
-
-    /* 1) lister le répertoire racine */
-    FAT_File far* fd = FAT_Open(&disk, "/");
-    FAT_DirectoryEntry entry;
-
-    printf("Repertoire racine :\r\n");
-    while (FAT_ReadEntry(&disk, fd, &entry) && entry.Name[0] != '\0')
-    {
-        printf("  ");
-        for (int i = 0; i < 11; i++)
-            putc(entry.Name[i]);
-        printf("\r\n");
-    }
-    FAT_Close(fd);
-
-    /* 2) essayer d'ouvrir un fichier qui n'existe pas */
- char buffer[100];
-     uint32_t read;
- 
-     printf("Contenu de test.txt :\r\n");
-     fd = FAT_Open(&disk, "test.txt");
-     while ((read = FAT_Read(&disk, fd, sizeof(buffer), buffer)))
-     {
-         for (uint32_t i = 0; i < read; i++)
-         {
-             if (buffer[i] == '\n')
-                 putc('\r');             /* le BIOS ne revient au début de la ligne qu'avec un retour chariot */
-             putc(buffer[i]);
-         }
-     }
-     FAT_Close(fd);
+    /* test.txt : 52 octets ; bigfile.txt : 8893 octets (les nombres de 1 a 2000) */
+    check(&disk, "test.txt", 64, 52, 4487);
+    check(&disk, "mydir/test.txt", 64, 52, 4487);
+    check(&disk, "bigfile.txt", 100, 8893, 378866);
+    check(&disk, "bigfile.txt", 64, 8893, 378866);
+    check(&disk, "/BIGFILE.TXT", 512, 8893, 378866);
 
 end:
     for (;;);

@@ -6,9 +6,9 @@ ASM=nasm
 SRC_DIR=src
 BUILD_DIR=$(abspath build)
 
-.PHONY: all floppy_image bootloader stage1 stage2 kernel tools_fat clean always run run-monitor
+.PHONY: all floppy_image bootloader stage1 stage2 kernel tools_fat fathost clean always run run-monitor
 
-all: floppy_image tools_fat
+all: floppy_image tools_fat fathost
 
 #
 # Image disquette FAT12
@@ -52,6 +52,16 @@ tools_fat: $(BUILD_DIR)/tools/fat
 $(BUILD_DIR)/tools/fat: tools/fat/fat.c | always
 	mkdir -p $(BUILD_DIR)/tools
 	gcc -g -Wall -o $(BUILD_DIR)/tools/fat tools/fat/fat.c
+
+#
+# Le pilote FAT de la stage 2, compilé pour le PC (pour le déboguer avec gdb, printf...)
+#
+fathost: $(BUILD_DIR)/tools/fathost
+
+$(BUILD_DIR)/tools/fathost: tools/fathost/host.c $(SRC_DIR)/bootloader/stage2/fat.c $(SRC_DIR)/bootloader/stage2/fat.h tools/fathost/shim/*.h | always
+	mkdir -p $(BUILD_DIR)/fathost $(BUILD_DIR)/tools
+	cp $(SRC_DIR)/bootloader/stage2/fat.c $(SRC_DIR)/bootloader/stage2/fat.h tools/fathost/shim/*.h $(BUILD_DIR)/fathost/
+	gcc -g -Wall -Dfar= -D_cdecl= -iquote $(BUILD_DIR)/fathost -o $(BUILD_DIR)/tools/fathost $(BUILD_DIR)/fathost/fat.c tools/fathost/host.c
 
 #
 # Utilitaires
