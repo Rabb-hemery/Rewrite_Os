@@ -88,7 +88,8 @@ En préparant le code, j'ai corrigé des problèmes que l'auteur a trouvés plus
 
 | Erreur / symptôme | Cause | Solution |
 |-------------------|-------|----------|
-| _à compléter_ | | |
+| `Error! E2028: __U4D is an undefined reference` au premier `make run` du jour 9 | `x86.asm` contenait encore `__U4D_OFF`, le nom que j'avais mis pour provoquer l'erreur à l'exo 5 du jour 8 ; le zip du jour 9 ne remplace pas ce fichier | remettre le nom d'origine avec `sed -i 's/__U4D_OFF/__U4D/g' src/bootloader/stage2/x86.asm`, puis `make clean` et `make run` |
+| Les espaces d'un nom 8.3 (`TEST    TXT`) disparaissent quand je le recopie (exo 3) | dans un texte normal, plusieurs espaces de suite sont fusionnés en un seul | écrire le nom entre crochets dans un bloc de code ou entre accents graves, et compter 8 + 3 caractères |
 
 ---
 
@@ -176,4 +177,5 @@ While preparing the code, I fixed problems the author found later while debuggin
 
 | Error / symptom | Cause | Solution |
 |-----------------|-------|----------|
-| _to be completed_ | | |
+| `Error! E2028: __U4D is an undefined reference` on the first `make run` of day 9 | `x86.asm` still contained `__U4D_OFF`, the name I used to trigger the error in exercise 5 of day 8; the day 9 zip does not replace that file | put the original name back with `sed -i 's/__U4D_OFF/__U4D/g' src/bootloader/stage2/x86.asm`, then `make clean` and `make run` |
+| The spaces of an 8.3 name (`TEST    TXT`) disappear when I copy it (exercise 3) | in normal text, several spaces in a row are merged into one | write the name in brackets inside a code block or between backticks, and count 8 + 3 characters |
