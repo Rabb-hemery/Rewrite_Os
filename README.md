@@ -26,6 +26,7 @@ A hobby operating system written from scratch for x86, following the *Building a
 - `dosfstools` (`mkfs.fat`) and `mtools` (`mcopy`, `mdir`): build and inspect the FAT12 floppy image
 - `gcc`: compiler for the small FAT12 reader tool that runs on my PC
 - Open Watcom 2 (`wcc`, `wlink`), installed in `/opt/watcom`: 16-bit C compiler for stage 2 of the bootloader
+- `gdb` (optional): to debug the FAT driver compiled for the PC (`build/tools/fathost`)
 - Developed on Arch Linux
 
 ### Build and run
@@ -49,6 +50,7 @@ make         # also builds the FAT12 reader tool: ./build/tools/fat build/main_f
 | 7 | `printf` from scratch: varargs, state machine, 64-bit division | [docs/day07.md](docs/day07.md) |
 | 8 | Reading the disk from C: BIOS wrappers, DISK layer | [docs/day08.md](docs/day08.md) |
 | 9 | The FAT driver in stage 2: open, read, paths | [docs/day09.md](docs/day09.md) |
+| 10 | Debugging lab: the FAT driver on the PC, 5 bugs | [docs/day10.md](docs/day10.md) |
 
 ---
 
@@ -277,6 +279,31 @@ With more than 16 files in the root directory, a search that reads a later secto
 
 ---
 
+### Day 10: what I learned
+
+![Day 10: the 5 tests pass](docs/images/day10-tests-ok.png)
+
+#### 1. Learning to debug is part of writing an OS
+Nothing goes as planned, and there is no built-in debugger. The method matters as much as the code: **reproduce** the bug with a precise test, **reduce** it to the smallest failing case, **compare** the OS with the PC, **locate** it with `printf` or `gdb`, **fix** it, then **rerun all the tests**.
+
+#### 2. The same driver on the PC
+`make` also builds `build/tools/fathost`: the very same `fat.c`, compiled by `gcc` on my PC (with small replacement headers and `-Dfar= -D_cdecl=`). On the PC I can use `gdb`, print anything, and compare with the OS.
+
+#### 3. Tests with expected values
+`main.c` reads files with different chunk sizes and prints `OK` or `ECHEC`, comparing the length and the sum of the bytes with values computed beforehand.
+
+#### 4. A bug lab with 5 bugs (`tools/bug.sh`)
+1. The extension is not uppercased: names typed in lowercase are not found.
+2. The buffer is not reloaded when emptied exactly: the length is right but the content is wrong, only for chunk sizes that divide 512.
+3. Subdirectories are not readable: their size is 0 in FAT.
+4. The FAT table is read through a near pointer instead of a far one: wrong data in the OS, but a crash on the PC.
+5. The root directory is not reloaded on each open: visible only with more than 16 files.
+
+#### 5. The lesson of bug 4
+The same defect gives different symptoms on the PC and in the OS (64-bit pointers against 16-bit segments). A bug that behaves differently on the two machines points to what differs between them.
+
+---
+
 ### Credits and license
 
 - This project follows the **"Building an OS"** video series by [nanobyte](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN). The explanations, journal and tests are my own notes.
@@ -299,6 +326,7 @@ Un système d'exploitation de loisir (hobby OS) écrit à partir de zéro pour l
 - `dosfstools` (`mkfs.fat`) et `mtools` (`mcopy`, `mdir`) : pour créer et inspecter l'image disquette FAT12
 - `gcc` : compilateur du petit outil de lecture FAT12 qui tourne sur mon PC
 - Open Watcom 2 (`wcc`, `wlink`), installé dans `/opt/watcom` : compilateur C 16 bits pour la stage 2 du bootloader
+- `gdb` (facultatif) : pour déboguer le pilote FAT compilé pour le PC (`build/tools/fathost`)
 - Développé sous Arch Linux
 
 ### Compilation et exécution
@@ -322,6 +350,7 @@ make         # compile aussi l'outil de lecture FAT12 : ./build/tools/fat build/
 | 7 | `printf` à partir de zéro : arguments variables, machine à états, division 64 bits | [docs/day07.md](docs/day07.md) |
 | 8 | Lire le disque depuis le C : enveloppes BIOS, couche DISK | [docs/day08.md](docs/day08.md) |
 | 9 | Le pilote FAT dans la stage 2 : ouvrir, lire, chemins | [docs/day09.md](docs/day09.md) |
+| 10 | Laboratoire de débogage : le pilote FAT sur le PC, 5 bugs | [docs/day10.md](docs/day10.md) |
 
 ---
 
@@ -547,6 +576,31 @@ Le disque lit des secteurs entiers, mais `FAT_Read` peut rendre n'importe quel n
 
 #### 5. Un bug que j'ai trouvé
 Avec plus de 16 fichiers à la racine, une recherche qui lit un secteur plus loin laisse le tampon sur ce secteur, et l'ouverture suivante échoue. `FAT_Open` recharge donc le premier secteur de la racine à chaque appel.
+
+---
+
+### Jour 10 : ce que j'ai appris
+
+![Jour 10 : les 5 tests réussissent](docs/images/day10-tests-ok.png)
+
+#### 1. Apprendre à déboguer fait partie de l'écriture d'un OS
+Rien ne se passe comme prévu, et il n'y a pas de débogueur intégré. La méthode compte autant que le code : **reproduire** le bug avec un test précis, le **réduire** au plus petit cas qui échoue, **comparer** l'OS et le PC, le **localiser** avec `printf` ou `gdb`, le **corriger**, puis **relancer tous les tests**.
+
+#### 2. Le même pilote sur le PC
+`make` compile aussi `build/tools/fathost` : exactement le même `fat.c`, compilé par `gcc` sur mon PC (avec de petits en-têtes de remplacement et `-Dfar= -D_cdecl=`). Sur le PC, je peux utiliser `gdb`, afficher ce que je veux et comparer avec l'OS.
+
+#### 3. Des tests avec valeurs attendues
+`main.c` lit des fichiers avec différentes tailles de morceau et affiche `OK` ou `ECHEC`, en comparant la longueur et la somme des octets avec des valeurs calculées à l'avance.
+
+#### 4. Un laboratoire de 5 bugs (`tools/bug.sh`)
+1. L'extension n'est pas mise en majuscules : les noms tapés en minuscules ne sont pas trouvés.
+2. Le tampon n'est pas rechargé quand il est vidé pile : la longueur est bonne mais le contenu faux, seulement pour les tailles de morceau qui divisent 512.
+3. Les sous-dossiers ne sont pas lisibles : leur taille vaut 0 dans FAT.
+4. La table FAT est lue avec un pointeur near au lieu de far : données fausses dans l'OS, mais plantage sur le PC.
+5. La racine n'est pas rechargée à chaque ouverture : visible seulement avec plus de 16 fichiers.
+
+#### 5. La leçon du bug 4
+Le même défaut donne des symptômes différents sur le PC et dans l'OS (pointeurs de 64 bits contre segments de 16 bits). Un bug qui se comporte différemment sur les deux machines désigne ce qui les distingue.
 
 ---
 
